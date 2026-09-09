@@ -1,0 +1,15 @@
+requests
+beautifulsoup4
+pandas
+numpy
+scikit-learn
+xgboost
+optuna
+shap
+imbalanced-learn
+joblib
+streamlit
+matplotlib
+transformers
+torch
+tqdm
