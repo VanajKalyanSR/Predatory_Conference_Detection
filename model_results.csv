@@ -1,0 +1,5 @@
+model,accuracy,f1_macro,auc_roc,cv_f1
+Logistic Regression,1.0,1.0,1.0,1.0
+Random Forest,1.0,1.0,1.0,0.9996197704888408
+XGBoost (tuned),1.0,1.0,1.0,1.0
+Stacking Ensemble,1.0,1.0,1.0,1.0
