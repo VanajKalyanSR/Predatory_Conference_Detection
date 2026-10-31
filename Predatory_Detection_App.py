@@ -146,41 +146,6 @@ def predict_from_features(feats):
     return pred, prob
 
 def show_result(pred, prob, feats):
-    # ── Verdict banner ────────────────────────────────────────────────────────
-    pct = prob * 100
-    if prob >= 0.75:
-        st.error(f"🚨 HIGH RISK — This appears to be a **Predatory** conference")
-        bar_color = "#FF4B4B"
-    elif prob >= 0.50:
-        st.warning(f"⚠️ MEDIUM RISK — This conference shows **suspicious** signals")
-        bar_color = "#FFA500"
-    elif prob >= 0.25:
-        st.info(f"🔵 LOW RISK — This conference appears mostly **legitimate**, with minor concerns")
-        bar_color = "#4B9EFF"
-    else:
-        st.success(f"✅ VERY LOW RISK — This conference appears **Legitimate**")
-        bar_color = "#00C853"
-
-    # ── Probability meter ─────────────────────────────────────────────────────
-    st.markdown(f"""
-    <div style="margin: 12px 0 6px;">
-        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
-            <span style="color:#aaa">Legitimate</span>
-            <span style="font-weight:600; font-size:15px;">Predatory Probability: {pct:.1f}%</span>
-            <span style="color:#aaa">Predatory</span>
-        </div>
-        <div style="background:#2a2a2a; border-radius:8px; height:18px; overflow:hidden;">
-            <div style="width:{pct:.1f}%; background:{bar_color}; height:100%; border-radius:8px;
-                        transition: width 0.5s ease;"></div>
-        </div>
-        <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-top:3px;">
-            <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("---")
-
     # ── Flag definitions: (label, value, what_it_means, bad_when) ────────────
     flag_defs = [
         ("Contact Email",        feats["has_free_email"],
@@ -221,14 +186,60 @@ def show_result(pred, prob, feats):
          True),
     ]
 
-    # ── Separate into red flags vs safe signals ───────────────────────────────
-    red_flags = [(lbl, msg, detail) for lbl, val, msg, detail, _ in flag_defs if val]
-    safe_ok   = [(lbl, detail) for lbl, val, msg, detail, _ in flag_defs if not val]
+    # ── Separate into red flags vs green (safe) flags ────────────────────────
+    red_flags  = [(lbl, msg, detail) for lbl, val, msg, detail, _ in flag_defs if val]
+    green_flags = [(lbl, detail) for lbl, val, msg, detail, _ in flag_defs if not val]
+
+    total = len(flag_defs)
+    red_count   = len(red_flags)
+    green_count = len(green_flags)
+
+    # ── Score driven purely by red vs green flag count ───────────────────────
+    # More red flags -> higher predatory score. More green flags -> lower score.
+    score_pct = (red_count / total) * 100
+
+    # ── Verdict banner ────────────────────────────────────────────────────────
+    if score_pct >= 75:
+        st.error(f"🚨 HIGH RISK — This appears to be a **Predatory** conference")
+        bar_color = "#FF4B4B"
+        risk_label = "High Risk"
+    elif score_pct >= 50:
+        st.warning(f"⚠️ MEDIUM RISK — This conference shows **suspicious** signals")
+        bar_color = "#FFA500"
+        risk_label = "Medium Risk"
+    elif score_pct >= 25:
+        st.info(f"🔵 LOW RISK — This conference appears mostly **legitimate**, with minor concerns")
+        bar_color = "#4B9EFF"
+        risk_label = "Low Risk"
+    else:
+        st.success(f"✅ VERY LOW RISK — This conference appears **Legitimate**")
+        bar_color = "#00C853"
+        risk_label = "Very Low Risk"
+
+    # ── Score meter ───────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style="margin: 12px 0 6px;">
+        <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px;">
+            <span style="color:#aaa">Legitimate</span>
+            <span style="font-weight:600; font-size:15px;">Predatory Score: {score_pct:.1f}% ({red_count}/{total} red flags)</span>
+            <span style="color:#aaa">Predatory</span>
+        </div>
+        <div style="background:#2a2a2a; border-radius:8px; height:18px; overflow:hidden;">
+            <div style="width:{score_pct:.1f}%; background:{bar_color}; height:100%; border-radius:8px;
+                        transition: width 0.5s ease;"></div>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-top:3px;">
+            <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
 
     col_a, col_b = st.columns(2)
 
     with col_a:
-        st.markdown(f"#### 🚩 Red Flags Found ({len(red_flags)})")
+        st.markdown(f"#### 🚩 Red Flags Found ({red_count})")
         if red_flags:
             for lbl, msg, _ in red_flags:
                 st.markdown(f"""
@@ -242,9 +253,9 @@ def show_result(pred, prob, feats):
             st.success("No red flags detected!")
 
     with col_b:
-        st.markdown(f"#### ✅ Safe Signals ({len(safe_ok)})")
-        if safe_ok:
-            for lbl, detail in safe_ok:
+        st.markdown(f"#### ✅ Green Flags ({green_count})")
+        if green_flags:
+            for lbl, detail in green_flags:
                 st.markdown(f"""
                 <div style="background:#1a3d2b; border-left:4px solid #00C853;
                             border-radius:6px; padding:10px 14px; margin-bottom:8px;">
@@ -253,60 +264,29 @@ def show_result(pred, prob, feats):
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.error("No safe signals detected.")
+            st.error("No green flags detected.")
 
-    # ── Summary score card — NOW DRIVEN BY THE MODEL'S PROBABILITY ────────────
-    # (previously this was a flat count of 9 flags, unrelated to the model's
-    #  actual prediction — that caused the 96% predatory + "7/9 safe" contradiction)
+    # ── Summary score card — driven purely by red/green flag counts ──────────
     st.markdown("---")
-    total = len(flag_defs)
-    score = len(safe_ok)
-
-    # Risk score now matches the model verdict, not an independent flag count
-    risk_pct = pct  # same probability used for the verdict banner above
-
-    if risk_pct >= 75:
-        risk_color_ = "#FF4B4B"
-        risk_label  = "High Risk"
-    elif risk_pct >= 50:
-        risk_color_ = "#FFA500"
-        risk_label  = "Medium Risk"
-    elif risk_pct >= 25:
-        risk_color_ = "#4B9EFF"
-        risk_label  = "Low Risk"
-    else:
-        risk_color_ = "#00C853"
-        risk_label  = "Very Low Risk"
-
     st.markdown(f"""
     <div style="background:#1e1e2e; border-radius:10px; padding:14px 18px;
                 display:flex; align-items:center; justify-content:space-between;">
         <div>
-            <div style="font-size:13px; color:#aaa;">Model Risk Score</div>
-            <div style="font-size:22px; font-weight:700; color:{risk_color_}">
-                {risk_pct:.0f}% — {risk_label}
+            <div style="font-size:13px; color:#aaa;">Predatory Score</div>
+            <div style="font-size:22px; font-weight:700; color:{bar_color}">
+                {score_pct:.0f}% — {risk_label}
             </div>
-            <div style="font-size:12px; color:#888;">based on full ML model prediction</div>
+            <div style="font-size:12px; color:#888;">based on red vs green flag count</div>
         </div>
         <div style="text-align:right;">
             <div style="font-size:13px; color:#aaa;">Flag Count</div>
-            <div style="font-size:22px; font-weight:700; color:#FF4B4B;">
-                {len(red_flags)} / {total}
+            <div style="font-size:22px; font-weight:700;">
+                <span style="color:#FF4B4B;">{red_count}</span> / <span style="color:#00C853;">{green_count}</span>
             </div>
-            <div style="font-size:12px; color:#888;">individual signals flagged</div>
+            <div style="font-size:12px; color:#888;">red flags / green flags (of {total})</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-    # Explicitly explain the difference so it's never confusing again
-    if len(red_flags) <= total // 2 and risk_pct >= 50:
-        st.caption(
-            f"ℹ️ Note: only {len(red_flags)} of {total} individual signals were flagged, "
-            f"but the ML model weighs text patterns and feature combinations together — "
-            f"not a simple flag count — which is why the overall risk is {risk_label.lower()} "
-            f"({risk_pct:.0f}%). A small number of strong indicators (e.g. fake indexing claims "
-            f"or urgency language) can outweigh several 'clean' individual signals."
-        )
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  UI
@@ -464,7 +444,7 @@ with tab2:
             st.error("CSV must have a column named 'url' or 'text'.")
 
         if mode_col and st.button("Run Batch Classification", type="primary"):
-            preds, probs, statuses = [], [], []
+            preds, scores, statuses = [], [], []
             progress = st.progress(0)
             status_box = st.empty()
 
@@ -476,24 +456,38 @@ with tab2:
                     text, final_url, err = scrape_url(val)
                     if err or not text.strip() or len(text.strip()) < 150:
                         preds.append("Unable to scrape")
-                        probs.append("-")
+                        scores.append("-")
                         statuses.append("Scrape failed")
                         progress.progress((i + 1) / len(df_up))
                         continue
-                    pred, prob, _ = predict(text, final_url)
+                    _, _, feats = predict(text, final_url)
                 else:
                     text = val
-                    pred, prob, _ = predict(text)
+                    _, _, feats = predict(text)
 
-                preds.append("Predatory" if pred else "Legitimate")
-                probs.append(round(prob * 100, 1))
+                red_count = sum([
+                    feats["has_free_email"],
+                    int(feats["fee_mention_count"] > 0),
+                    feats["has_rapid_review_claim"],
+                    feats["has_impact_factor_claim"],
+                    int(feats["vague_scope_count"] > 0),
+                    int(feats["urgency_phrase_count"] > 0),
+                    int(feats["indexing_claim_count"] > 0),
+                    feats["domain_uses_http"],
+                    int(feats["plagiarism_check"] == 0),
+                ])
+                total = 9
+                score_pct = round((red_count / total) * 100, 1)
+
+                preds.append("Predatory" if score_pct >= 50 else "Legitimate")
+                scores.append(score_pct)
                 statuses.append("OK")
                 progress.progress((i + 1) / len(df_up))
 
             status_box.empty()
-            df_up["prediction"]       = preds
-            df_up["predatory_prob_%"] = probs
-            df_up["status"]           = statuses
+            df_up["prediction"]      = preds
+            df_up["predatory_score_%"] = scores
+            df_up["status"]          = statuses
             st.dataframe(df_up)
 
             csv_out = df_up.to_csv(index=False).encode("utf-8")
@@ -550,15 +544,11 @@ with tab4:
 | Domain uses HTTP | No HTTPS = red flag |
 | Plagiarism screening | Absence of plagiarism policy = red flag |
 
-**Model pipeline:**
-1. TF-IDF vectorization of website text
-2. Numeric feature extraction (12 features)
-3. SMOTE oversampling for class balance
-4. Stacking ensemble: Random Forest + XGBoost → Logistic meta-learner
-5. 5-fold stratified cross-validation
+**Scoring:**
+The Predatory Score is driven purely by the count of red flags vs green flags
+found out of the 9 signals above: more red flags raises the predatory score,
+more green flags lowers it.
 
 **When URL scraping fails:**
-The app asks 10 manual questions about the conference to still produce a prediction using numeric features only.
-
-**Accuracy target:** > 95% F1-macro on hold-out test set
+The app asks 10 manual questions about the conference to still produce a result using numeric features only.
     """)
